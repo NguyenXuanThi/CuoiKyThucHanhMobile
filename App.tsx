@@ -1,16 +1,11 @@
-import React, { useEffect } from 'react';
-import { View, Text } from 'react-native';
-import { createTable, seedData } from './db';
+import React from 'react';
+import { SafeAreaView } from 'react-native';
+import BooksList from './BooksList';
 
 export default function App() {
-  useEffect(() => {
-    createTable();
-    seedData();
-  }, []);
-
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Reading List App</Text>
-    </View>
+    <SafeAreaView style={{ flex: 1 }}>
+      <BooksList />
+    </SafeAreaView>
   );
 }
