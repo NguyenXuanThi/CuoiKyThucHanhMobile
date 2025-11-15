@@ -1,11 +1,21 @@
-import React from 'react';
-import { SafeAreaView } from 'react-native';
+// App.tsx
+import React, { useEffect } from 'react';
+import { SafeAreaView, StyleSheet } from 'react-native';
 import BooksList from './BooksList';
+import { seedBooks } from './db';
 
 export default function App() {
+  useEffect(() => {
+    seedBooks(); // Seed dữ liệu mẫu khi app start
+  }, []);
+
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={styles.container}>
       <BooksList />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+});

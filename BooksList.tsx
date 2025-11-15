@@ -1,47 +1,47 @@
+// BooksList.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
-import { db, Book } from './db'; // dbMock.ts bạn đang dùng
+import { db, Book } from './db';
 
 export default function BooksList() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // Hàm lấy danh sách sách từ mock DB
+  const loadBooks = async () => {
+    const data = await db.all(); // Gọi db.all() để lấy tất cả sách
+    setBooks(data); // Cập nhật state books với dữ liệu lấy được
+    setLoading(false); // Set loading là false sau khi lấy xong dữ liệu
+  };
+
+  // useEffect để load dữ liệu khi component được render lần đầu
   useEffect(() => {
-    db.all().then(setBooks);
-  }, []);
+    loadBooks();
+  }, []); // Chạy chỉ 1 lần khi component mount
 
-  const renderItem = ({ item }: { item: Book }) => (
-    <View style={styles.item}>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.author}>{item.author}</Text>
-      <Text style={styles.status}>{item.status}</Text>
-    </View>
-  );
+  // Nếu đang loading, show loading text
+  if (loading) return <Text>Loading...</Text>;
+
+  // Nếu không có sách nào trong danh sách, show thông báo
+  if (books.length === 0) return <Text>Chưa có sách trong danh sách đọc.</Text>;
 
   return (
-    <View style={styles.container}>
-      {books.length === 0 ? (
-        <Text style={styles.empty}>Chưa có sách trong danh sách đọc.</Text>
-      ) : (
-        <FlatList
-          data={books}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem}
-        />
+    <FlatList
+      data={books} // Sử dụng dữ liệu books từ state
+      keyExtractor={item => item.id.toString()} // Chỉ định key cho mỗi item
+      renderItem={({ item }) => (
+        <View style={styles.item}>
+          <Text style={styles.title}>{item.title}</Text>
+          {item.author && <Text>{item.author}</Text>}
+          <Text style={styles.status}>{item.status}</Text>
+        </View>
       )}
-    </View>
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  item: {
-    padding: 10,
-    marginVertical: 5,
-    backgroundColor: '#f2f2f2',
-    borderRadius: 5,
-  },
+  item: { padding: 10, borderBottomWidth: 1, borderColor: '#ccc' },
   title: { fontWeight: 'bold', fontSize: 16 },
-  author: { color: '#555' },
-  status: { color: '#888', marginTop: 2 },
-  empty: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#666' },
+  status: { fontStyle: 'italic', color: 'gray' },
 });
