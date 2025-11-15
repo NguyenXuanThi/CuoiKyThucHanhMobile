@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity, Alert } from 'react-native';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { db, seedBooks, Book, BookStatus } from './db';
 import AddBookModal from './AddBookModal';
-import EditBookModal from './EditBookModal'; // Modal chỉnh sửa
+import EditBookModal from './EditBookModal';
 
 // Các trạng thái sách có thể có
 const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
@@ -10,78 +10,72 @@ const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
 const BooksList = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  // Thêm state cho modal sửa
   const [editBook, setEditBook] = useState<Book | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
 
-  // Hàm mở modal sửa sách
-  const handleEdit = (book: Book) => {
-    setEditBook(book);
-    setEditModalVisible(true);
-  };
+  // Câu 8: search & filter
+  const [searchText, setSearchText] = useState('');
+  const [filterStatus, setFilterStatus] = useState<BookStatus | 'all'>('all');
 
-  // Hàm cập nhật sách sau khi sửa
-  const handleUpdateBook = (updated: Book) => {
-    setBooks(prev => prev.map(b => b.id === updated.id ? updated : b));
-  };
-
-  // Khi component được mount, seed sách mẫu và tải danh sách sách
   useEffect(() => {
-    seedBooks(); // Seed dữ liệu mẫu nếu chưa có
-    db.all().then(setBooks); // Tải danh sách sách từ DB
+    seedBooks();
+    db.all().then(setBooks);
   }, []);
 
-  // Hàm xử lý khi thêm sách mới
   const handleAddBook = (book: Book) => {
     setBooks(prev => [...prev, book]);
   };
 
-  // Hàm xử lý thay đổi trạng thái khi nhấn vào sách
-  const handlePress = async (book: Book) => {
-    // Lấy chỉ số hiện tại của trạng thái trong mảng statusCycle
-    const currentIndex = statusCycle.indexOf(book.status);
-    // Tính trạng thái tiếp theo
-    const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
-    // Cập nhật trạng thái của sách trong DB
-    await db.update(book.id, { status: nextStatus });
-    const updatedBooks = await db.all(); // Lấy lại danh sách sách sau khi cập nhật
-    setBooks(updatedBooks); // Cập nhật lại state books
+  const handleUpdateBook = (updated: Book) => {
+    setBooks(prev => prev.map(b => b.id === updated.id ? updated : b));
   };
 
-  // Hàm xử lý xóa sách với xác nhận
+  const handlePress = async (book: Book) => {
+    const currentIndex = statusCycle.indexOf(book.status);
+    const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
+    await db.update(book.id, { status: nextStatus });
+    const updatedBooks = await db.all();
+    setBooks(updatedBooks);
+  };
+
   const handleDelete = (book: Book) => {
     Alert.alert(
       "Xác nhận xóa sách",
       `Bạn có chắc chắn muốn xóa sách "${book.title}"?`,
       [
-        {
-          text: "Hủy",
-          style: "cancel"
-        },
-        {
-          text: "Xóa",
-          onPress: async () => {
-            await db.delete(book.id); // Xóa sách khỏi DB
-            const updatedBooks = await db.all(); // Lấy lại danh sách sách sau khi xóa
-            setBooks(updatedBooks); // Cập nhật lại danh sách sách
-          },
-          style: "destructive"
+        { text: "Hủy", style: "cancel" },
+        { text: "Xóa", style: "destructive", onPress: async () => {
+            await db.delete(book.id);
+            const updatedBooks = await db.all();
+            setBooks(updatedBooks);
+          }
         }
       ]
     );
   };
 
-  // Hàm render từng item sách trong FlatList
-  const renderItem = ({ item }: { item: Book }) => {
-    let bgColor = '#fff'; // Màu nền mặc định
+  const handleEdit = (book: Book) => {
+    setEditBook(book);
+    setEditModalVisible(true);
+  };
 
-    // Đặt màu nền tùy vào trạng thái của sách
-    if (item.status === 'reading') bgColor = '#ffeaa7'; // Màu vàng khi đang đọc
-    if (item.status === 'done') bgColor = '#55efc4'; // Màu xanh khi đã đọc xong
+  // Câu 8: lọc và search sách dùng useMemo để tối ưu
+  const filteredBooks = useMemo(() => {
+    return books.filter(b => {
+      const matchesStatus = filterStatus === 'all' || b.status === filterStatus;
+      const matchesSearch = b.title.toLowerCase().includes(searchText.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }, [books, searchText, filterStatus]);
+
+  const renderItem = useCallback(({ item }: { item: Book }) => {
+    let bgColor = '#fff';
+    if (item.status === 'reading') bgColor = '#ffeaa7';
+    if (item.status === 'done') bgColor = '#55efc4';
 
     return (
       <TouchableOpacity
-        onPress={() => handlePress(item)} // Xử lý khi nhấn vào sách
+        onPress={() => handlePress(item)}
         style={[styles.item, { backgroundColor: bgColor }]}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.author}>{item.author || 'Unknown'}</Text>
@@ -90,27 +84,48 @@ const BooksList = () => {
         <Button title="Xóa" onPress={() => handleDelete(item)} />
       </TouchableOpacity>
     );
-  };
+  }, [books]);
 
   return (
     <View style={styles.container}>
+      {/* Câu 8: Search Input */}
+      <TextInput
+        style={styles.input}
+        placeholder="Tìm theo tên sách..."
+        value={searchText}
+        onChangeText={setSearchText}
+      />
+
+      {/* Câu 8: Filter theo status */}
+      <View style={styles.filterContainer}>
+        {(['all', ...statusCycle] as (BookStatus | 'all')[]).map(status => (
+          <Button
+            key={status}
+            title={status === 'all' ? 'Tất cả' : status}
+            onPress={() => setFilterStatus(status)}
+            color={filterStatus === status ? '#0984e3' : '#b2bec3'}
+          />
+        ))}
+      </View>
+
       <Button title="Thêm sách" onPress={() => setModalVisible(true)} />
-      {books.length === 0 ? (
-        <Text>Chưa có sách trong danh sách đọc.</Text>
+
+      {filteredBooks.length === 0 ? (
+        <Text>Không tìm thấy sách phù hợp.</Text>
       ) : (
         <FlatList
-          data={books}
+          data={filteredBooks}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem} // Render mỗi item sách
+          renderItem={renderItem}
         />
       )}
-      {/* Modal thêm sách */}
+
       <AddBookModal
         visible={modalVisible}
-        onClose={() => setModalVisible(false)} // Đóng modal
-        onAdd={handleAddBook} // Hàm gọi khi thêm sách mới
+        onClose={() => setModalVisible(false)}
+        onAdd={handleAddBook}
       />
-      {/* Modal sửa sách */}
+
       <EditBookModal
         visible={editModalVisible}
         book={editBook}
@@ -129,4 +144,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: 'bold' },
   author: { fontSize: 14, color: '#555' },
   status: { fontSize: 12, color: 'gray' },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 8, marginBottom: 8 },
+  filterContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 }
 });
