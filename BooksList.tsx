@@ -1,137 +1,113 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
-import { db, seedBooks, Book, BookStatus } from './db';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  SectionList,
+  Button,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { useBooks } from './useBook';
 import AddBookModal from './AddBookModal';
 import EditBookModal from './EditBookModal';
+import { Book, BookStatus } from './db';
 
 const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
 
 const BooksList = () => {
-  const [books, setBooks] = useState<Book[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editBook, setEditBook] = useState<Book | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
 
-  const [searchText, setSearchText] = useState('');
-  const [filterStatus, setFilterStatus] = useState<BookStatus | 'all'>('all');
+  const {
+    books,
+    allBooks,
+    searchText,
+    setSearchText,
+    filterStatus,
+    setFilterStatus,
+    insertBook,
+    updateBook,
+    deleteBook,
+    changeStatus,
+    importBooksFromAPI,
+    importing,
+    importError,
+    refreshing,
+    onRefresh,
+  } = useBooks();
 
-  // Q9: loading & error state
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
+  const groupedBooks = ['planning', 'reading', 'done'].map(status => ({
+    title: status,
+    data: books.filter(b => b.status === status),
+  }));
 
-  useEffect(() => {
-    seedBooks();
-    db.all().then(setBooks);
-  }, []);
+  const handleDelete = useCallback(
+    (book: Book) => {
+      Alert.alert('Xác nhận', `Bạn có chắc muốn xóa sách "${book.title}"?`, [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xóa', style: 'destructive', onPress: () => deleteBook(book.id) },
+      ]);
+    },
+    [deleteBook]
+  );
 
-  const handleAddBook = (book: Book) => {
-    setBooks(prev => [...prev, book]);
-  };
+  const handlePress = useCallback(
+    (book: Book) => {
+      const currentIndex = statusCycle.indexOf(book.status);
+      const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
+      changeStatus(book, nextStatus);
+    },
+    [changeStatus]
+  );
 
-  const handleUpdateBook = (updated: Book) => {
-    setBooks(prev => prev.map(b => b.id === updated.id ? updated : b));
-  };
-
-  const handlePress = async (book: Book) => {
-    const currentIndex = statusCycle.indexOf(book.status);
-    const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
-    await db.update(book.id, { status: nextStatus });
-    const updatedBooks = await db.all();
-    setBooks(updatedBooks);
-  };
-
-  const handleDelete = (book: Book) => {
-    Alert.alert(
-      "Xác nhận xóa sách",
-      `Bạn có chắc chắn muốn xóa sách "${book.title}"?`,
-      [
-        { text: "Hủy", style: "cancel" },
-        { text: "Xóa", style: "destructive", onPress: async () => {
-            await db.delete(book.id);
-            const updatedBooks = await db.all();
-            setBooks(updatedBooks);
-          }
-        }
-      ]
-    );
-  };
-
-  const handleEdit = (book: Book) => {
+  const handleEdit = useCallback((book: Book) => {
     setEditBook(book);
     setEditModalVisible(true);
-  };
+  }, []);
 
-  // Q8: lọc và search sách
-  const filteredBooks = useMemo(() => {
-    return books.filter(b => {
-      const matchesStatus = filterStatus === 'all' || b.status === filterStatus;
-      const matchesSearch = b.title.toLowerCase().includes(searchText.toLowerCase());
-      return matchesStatus && matchesSearch;
-    });
-  }, [books, searchText, filterStatus]);
+  const renderItem = useCallback(
+    ({ item }: { item: Book }) => {
+      let bgColor = '#fff';
+      if (item.status === 'reading') bgColor = '#ffeaa7';
+      if (item.status === 'done') bgColor = '#55efc4';
 
-  const renderItem = useCallback(({ item }: { item: Book }) => {
-    let bgColor = '#fff';
-    if (item.status === 'reading') bgColor = '#ffeaa7';
-    if (item.status === 'done') bgColor = '#55efc4';
-
-    return (
-      <TouchableOpacity
-        onPress={() => handlePress(item)}
-        style={[styles.item, { backgroundColor: bgColor }]}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.author}>{item.author || 'Unknown'}</Text>
-        <Text style={styles.status}>{item.status}</Text>
-        <Button title="Sửa" onPress={() => handleEdit(item)} />
-        <Button title="Xóa" onPress={() => handleDelete(item)} />
-      </TouchableOpacity>
-    );
-  }, [books]);
-
-  // Q9: import sách từ API
-  const importBooksFromAPI = async () => {
-    setImporting(true);
-    setImportError(null);
-    try {
-      const response = await fetch('https://jsonplaceholder.typicode.com/posts'); // đổi URL thành API thật
-      if (!response.ok) throw new Error('Lỗi khi gọi API');
-      const data: { title: string, author?: string }[] = await response.json();
-
-      const existingTitles = books.map(b => b.title.toLowerCase());
-      const newBooks: Book[] = [];
-
-      for (let item of data) {
-        if (!existingTitles.includes(item.title.toLowerCase())) {
-          const book = await db.insert(item.title, item.author);
-          newBooks.push(book);
-        }
-      }
-
-      if (newBooks.length === 0) Alert.alert("Không có sách mới để import");
-      setBooks(prev => [...prev, ...newBooks]);
-    } catch (err: any) {
-      setImportError(err.message || "Lỗi không xác định");
-    } finally {
-      setImporting(false);
-    }
-  };
+      return (
+        <TouchableOpacity
+          style={[styles.item, { backgroundColor: bgColor }]}
+          onPress={() => handlePress(item)}
+        >
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.author}>{item.author || 'Unknown'}</Text>
+          <Text style={styles.status}>{item.status}</Text>
+          <Button title="Sửa" onPress={() => handleEdit(item)} />
+          <Button title="Xóa" onPress={() => handleDelete(item)} />
+        </TouchableOpacity>
+      );
+    },
+    [handlePress, handleEdit, handleDelete]
+  );
 
   return (
     <View style={styles.container}>
       <TextInput
         style={styles.input}
-        placeholder="Tìm theo tên sách..."
+        placeholder="Tìm kiếm sách..."
         value={searchText}
         onChangeText={setSearchText}
       />
 
       <View style={styles.filterContainer}>
-        {(['all', ...statusCycle] as (BookStatus | 'all')[]).map(status => (
+        {(['all', ...statusCycle] as (BookStatus | 'all')[]).map(s => (
           <Button
-            key={status}
-            title={status === 'all' ? 'Tất cả' : status}
-            onPress={() => setFilterStatus(status)}
-            color={filterStatus === status ? '#0984e3' : '#b2bec3'}
+            key={s}
+            title={s === 'all' ? 'Tất cả' : s}
+            onPress={() => setFilterStatus(s)}
+            color={filterStatus === s ? '#0984e3' : '#b2bec3'}
           />
         ))}
       </View>
@@ -142,28 +118,22 @@ const BooksList = () => {
       {importing && <ActivityIndicator size="small" color="#0984e3" />}
       {importError && <Text style={{ color: 'red' }}>{importError}</Text>}
 
-      {filteredBooks.length === 0 ? (
-        <Text>Không tìm thấy sách phù hợp.</Text>
+      {allBooks.length === 0 ? (
+        <Text style={{ marginTop: 16 }}>Danh sách sách trống. Hãy thêm sách mới!</Text>
       ) : (
-        <FlatList
-          data={filteredBooks}
-          keyExtractor={(item) => item.id.toString()}
+        <SectionList
+          sections={groupedBooks}
+          keyExtractor={item => item.id.toString()}
           renderItem={renderItem}
+          renderSectionHeader={({ section: { title } }) => (
+            <Text style={styles.sectionHeader}>{title.toUpperCase()}</Text>
+          )}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}
 
-      <AddBookModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onAdd={handleAddBook}
-      />
-
-      <EditBookModal
-        visible={editModalVisible}
-        book={editBook}
-        onClose={() => setEditModalVisible(false)}
-        onUpdate={handleUpdateBook}
-      />
+      <AddBookModal visible={modalVisible} onClose={() => setModalVisible(false)} onAdd={insertBook} />
+      <EditBookModal visible={editModalVisible} book={editBook} onClose={() => setEditModalVisible(false)} onUpdate={updateBook} />
     </View>
   );
 };
@@ -177,5 +147,6 @@ const styles = StyleSheet.create({
   author: { fontSize: 14, color: '#555' },
   status: { fontSize: 12, color: 'gray' },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 8, marginBottom: 8 },
-  filterContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 }
+  filterContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
+  sectionHeader: { fontSize: 18, fontWeight: 'bold', marginTop: 20, backgroundColor: '#dfe6e9', padding: 4 },
 });
