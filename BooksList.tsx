@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity } from 'react-native';
 import { db, seedBooks, Book, BookStatus } from './db';
 import AddBookModal from './AddBookModal';
+import EditBookModal from './EditBookModal'; // Import modal chỉnh sửa
 
 // Các trạng thái sách có thể có
 const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
@@ -9,6 +10,20 @@ const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
 const BooksList = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  // Thêm state cho modal sửa
+  const [editBook, setEditBook] = useState<Book | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+
+  // Hàm mở modal sửa sách
+  const handleEdit = (book: Book) => {
+    setEditBook(book);
+    setEditModalVisible(true);
+  };
+
+  // Hàm cập nhật sách sau khi sửa
+  const handleUpdateBook = (updated: Book) => {
+    setBooks(prev => prev.map(b => b.id === updated.id ? updated : b));
+  };
 
   // Khi component được mount, seed sách mẫu và tải danh sách sách
   useEffect(() => {
@@ -48,6 +63,7 @@ const BooksList = () => {
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.author}>{item.author || 'Unknown'}</Text>
         <Text style={styles.status}>{item.status}</Text>
+        <Button title="Sửa" onPress={() => handleEdit(item)} />
       </TouchableOpacity>
     );
   };
@@ -64,10 +80,18 @@ const BooksList = () => {
           renderItem={renderItem} // Render mỗi item sách
         />
       )}
+      {/* Modal thêm sách */}
       <AddBookModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)} // Đóng modal
         onAdd={handleAddBook} // Hàm gọi khi thêm sách mới
+      />
+      {/* Modal sửa sách */}
+      <EditBookModal
+        visible={editModalVisible}
+        book={editBook}
+        onClose={() => setEditModalVisible(false)}
+        onUpdate={handleUpdateBook}
       />
     </View>
   );
