@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { db, seedBooks, Book, BookStatus } from './db';
 import AddBookModal from './AddBookModal';
 import EditBookModal from './EditBookModal';
 
-// Các trạng thái sách có thể có
 const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
 
 const BooksList = () => {
@@ -13,9 +12,12 @@ const BooksList = () => {
   const [editBook, setEditBook] = useState<Book | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
 
-  // Câu 8: search & filter
   const [searchText, setSearchText] = useState('');
   const [filterStatus, setFilterStatus] = useState<BookStatus | 'all'>('all');
+
+  // Q9: loading & error state
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     seedBooks();
@@ -59,7 +61,7 @@ const BooksList = () => {
     setEditModalVisible(true);
   };
 
-  // Câu 8: lọc và search sách dùng useMemo để tối ưu
+  // Q8: lọc và search sách
   const filteredBooks = useMemo(() => {
     return books.filter(b => {
       const matchesStatus = filterStatus === 'all' || b.status === filterStatus;
@@ -86,9 +88,36 @@ const BooksList = () => {
     );
   }, [books]);
 
+  // Q9: import sách từ API
+  const importBooksFromAPI = async () => {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const response = await fetch('https://jsonplaceholder.typicode.com/posts'); // đổi URL thành API thật
+      if (!response.ok) throw new Error('Lỗi khi gọi API');
+      const data: { title: string, author?: string }[] = await response.json();
+
+      const existingTitles = books.map(b => b.title.toLowerCase());
+      const newBooks: Book[] = [];
+
+      for (let item of data) {
+        if (!existingTitles.includes(item.title.toLowerCase())) {
+          const book = await db.insert(item.title, item.author);
+          newBooks.push(book);
+        }
+      }
+
+      if (newBooks.length === 0) Alert.alert("Không có sách mới để import");
+      setBooks(prev => [...prev, ...newBooks]);
+    } catch (err: any) {
+      setImportError(err.message || "Lỗi không xác định");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* Câu 8: Search Input */}
       <TextInput
         style={styles.input}
         placeholder="Tìm theo tên sách..."
@@ -96,7 +125,6 @@ const BooksList = () => {
         onChangeText={setSearchText}
       />
 
-      {/* Câu 8: Filter theo status */}
       <View style={styles.filterContainer}>
         {(['all', ...statusCycle] as (BookStatus | 'all')[]).map(status => (
           <Button
@@ -109,6 +137,10 @@ const BooksList = () => {
       </View>
 
       <Button title="Thêm sách" onPress={() => setModalVisible(true)} />
+      <Button title="Import từ API" onPress={importBooksFromAPI} />
+
+      {importing && <ActivityIndicator size="small" color="#0984e3" />}
+      {importError && <Text style={{ color: 'red' }}>{importError}</Text>}
 
       {filteredBooks.length === 0 ? (
         <Text>Không tìm thấy sách phù hợp.</Text>
