@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity, Alert } from 'react-native';
 import { db, seedBooks, Book, BookStatus } from './db';
 import AddBookModal from './AddBookModal';
-import EditBookModal from './EditBookModal'; // Import modal chỉnh sửa
+import EditBookModal from './EditBookModal'; // Modal chỉnh sửa
 
 // Các trạng thái sách có thể có
 const statusCycle: BookStatus[] = ['planning', 'reading', 'done'];
@@ -48,6 +48,29 @@ const BooksList = () => {
     setBooks(updatedBooks); // Cập nhật lại state books
   };
 
+  // Hàm xử lý xóa sách với xác nhận
+  const handleDelete = (book: Book) => {
+    Alert.alert(
+      "Xác nhận xóa sách",
+      `Bạn có chắc chắn muốn xóa sách "${book.title}"?`,
+      [
+        {
+          text: "Hủy",
+          style: "cancel"
+        },
+        {
+          text: "Xóa",
+          onPress: async () => {
+            await db.delete(book.id); // Xóa sách khỏi DB
+            const updatedBooks = await db.all(); // Lấy lại danh sách sách sau khi xóa
+            setBooks(updatedBooks); // Cập nhật lại danh sách sách
+          },
+          style: "destructive"
+        }
+      ]
+    );
+  };
+
   // Hàm render từng item sách trong FlatList
   const renderItem = ({ item }: { item: Book }) => {
     let bgColor = '#fff'; // Màu nền mặc định
@@ -64,6 +87,7 @@ const BooksList = () => {
         <Text style={styles.author}>{item.author || 'Unknown'}</Text>
         <Text style={styles.status}>{item.status}</Text>
         <Button title="Sửa" onPress={() => handleEdit(item)} />
+        <Button title="Xóa" onPress={() => handleDelete(item)} />
       </TouchableOpacity>
     );
   };
